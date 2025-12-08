@@ -633,14 +633,14 @@
 [교사용] 800 문학 | 인생은소설이다 | 기욤뮈소지음,양영란옮김 | 9788984374164 | https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9788984374164.jpg |
 [교사용] 800 문학 | 외투 | 니콜라이바실리예비치고골리지음,조주관옮김 | 9788937429156 | https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9788937429156.jpg |
 [교사용] 900 역사 | 포르투갈은블루다 | 조용준지음 | 9791191455663 | https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9791191455663.jpg |
+
+
 `;
     // 2) 여기부터는 JS 로직입니다.
-
     function kyoboSearchUrl(isbn) {
       const cleanIsbn = (isbn || "").replace(/[^0-9Xx]/g, "");
       return "https://search.kyobobook.co.kr/search?keyword=" + encodeURIComponent(cleanIsbn);
     }
-
     const KDC_NAMES = {
       "000": "총류",
       "100": "철학",
@@ -656,40 +656,30 @@
     function getKdcName(code) {
       return KDC_NAMES[code] || "";
     }
-
     // 정규식 없이 파싱
     function parseRawData(raw) {
       const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l);
       const books = [];
-
       for (const line of lines) {
         const parts = line.split("|").map(p => p.trim());
         if (parts.length < 4) continue;
-
-        const left   = parts[0]; // [일반책] 000 총류
+        const left   = parts[0]; // [별치] 000 총류
         const title  = parts[1] || "";
         const author = parts[2] || "";
         const isbn   = parts[3] || "";
         const cover  = parts[4] || "";
-
-        // left 예시: "[일반책] 000 총류"
         const rb = left.indexOf("]");
         if (left[0] !== "[" || rb === -1) continue;
-
         const shelf = left.substring(1, rb).trim();
         const rest  = left.substring(rb + 1).trim();
-
         const restParts = rest.split(/\s+/);
         const kdc = (restParts[0] || "").trim();
         const kdcName = restParts.slice(1).join(" ").trim();
-
         if (!kdc) continue;
-
         books.push({ shelf, kdc, kdcName, title, author, isbn, cover });
       }
       return books;
     }
-
     function getShelves(data) {
       const map = new Map();
       data.forEach(book => {
@@ -699,7 +689,6 @@
       });
       return Array.from(map.entries()).map(([name, count]) => ({ name, count }));
     }
-
     function renderShelfTabs(shelves, initialShelf, allBooks) {
       const container = document.getElementById("shelfTabs");
       container.innerHTML = "";
@@ -721,91 +710,87 @@
         container.appendChild(btn);
       });
     }
-
+    // ★ 접기/펼치기 + 삼각형 포함한 KDC 섹션 렌더링
     function renderKdcSections(allBooks, shelfName) {
       const container = document.getElementById("kdcContainer");
       container.innerHTML = "";
-
       const filtered = allBooks.filter(book => (book.shelf || "기타") === shelfName);
       if (!filtered.length) {
         container.innerHTML =
           '<p style="text-align:center; color:#999; margin-top:24px;">표시할 도서가 없습니다.</p>';
         return;
       }
-
+      // KDC 코드별 그룹
       const group = new Map();
       filtered.forEach(book => {
         const code = String(book.kdc || "").padStart(3, "0").slice(0, 3);
         if (!group.has(code)) group.set(code, []);
         group.get(code).push(book);
       });
-
       const sortedCodes = Array.from(group.keys()).sort((a, b) =>
         a.localeCompare(b, "ko")
       );
-
       sortedCodes.forEach(code => {
         const books = group.get(code);
         const sec = document.createElement("section");
         sec.className = "kdc-section";
-
         const nameFromData = books[0].kdcName || "";
         const name = nameFromData || getKdcName(code);
-
+        // 헤더: ▼ / ▶ 토글 아이콘 포함
         const header = document.createElement("div");
         header.className = "kdc-header";
         header.innerHTML = `
-          <div class="kdc-code">${code} ${name || ""}</div>
+          <div class="kdc-code">
+            <span class="kdc-toggle">▼</span> ${code} ${name || ""}
+          </div>
           <div class="kdc-count">${books.length}권</div>
         `;
+        header.style.cursor = "pointer";
         sec.appendChild(header);
-
+        const toggleSpan = header.querySelector(".kdc-toggle");
         const grid = document.createElement("div");
         grid.className = "book-grid";
-
+        // ★ 처음에는 펼쳐진 상태 (display 기본값: grid)
         books.forEach(book => {
           const card = document.createElement("article");
           card.className = "book-card";
-
           const coverWrapper = document.createElement("a");
           coverWrapper.className = "book-cover-wrapper";
           coverWrapper.href = kyoboSearchUrl(book.isbn);
           coverWrapper.target = "_blank";
           coverWrapper.rel = "noopener noreferrer";
           coverWrapper.title = `${book.title} - 교보문고 검색으로 이동`;
-
           const img = document.createElement("img");
           img.src = book.cover || "https://via.placeholder.com/200x280?text=No+Image";
           img.alt = book.title || "표지 이미지";
           coverWrapper.appendChild(img);
-
           const info = document.createElement("div");
           info.className = "book-info";
-
           const kdcCode = String(book.kdc || "").padStart(3, "0");
           const kdcName = book.kdcName || getKdcName(kdcCode);
-
           info.innerHTML = `
             <div class="book-title">${book.title || "(제목 정보 없음)"}</div>
             <div class="book-author">${book.author || ""}</div>
             <div class="book-kdc">${kdcCode} ${kdcName || ""}</div>
           `;
-
           card.appendChild(coverWrapper);
           card.appendChild(info);
           grid.appendChild(card);
         });
-
+        // 헤더 클릭 시 이 KDC 섹션만 접기/펼치기
+        header.addEventListener("click", () => {
+          const isHidden = grid.style.display === "none";
+          grid.style.display = isHidden ? "grid" : "none";
+          toggleSpan.textContent = isHidden ? "▼" : "▶";
+        });
         sec.appendChild(grid);
         container.appendChild(sec);
       });
     }
-
     window.addEventListener("DOMContentLoaded", () => {
       const books = parseRawData(RAW_DATA);
       const shelves = getShelves(books);
       const defaultShelf = shelves[0]?.name;
-
       renderShelfTabs(shelves, defaultShelf, books);
       renderKdcSections(books, defaultShelf);
     });
