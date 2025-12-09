@@ -801,9 +801,10 @@ header.innerHTML = `
           coverWrapper.rel = "noopener noreferrer";
           coverWrapper.title = `${book.title} - 교보문고 검색으로 이동`;
 const img = document.createElement("img");
+const rawCover = (book.image || book.cover || "").trim();
 img.src =
-  book.cover && book.cover.trim()
-    ? book.cover.trim()
+  rawCover && rawCover.startsWith("http")
+    ? rawCover
     : "https://via.placeholder.com/200x280?text=No+Image";
 img.alt = book.title || "표지 이미지";
 
@@ -841,3 +842,4 @@ img.alt = book.title || "표지 이미지";
   </script>
 </body>
 </html>
+
