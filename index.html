@@ -801,12 +801,17 @@ header.innerHTML = `
           coverWrapper.rel = "noopener noreferrer";
           coverWrapper.title = `${book.title} - 교보문고 검색으로 이동`;
 const img = document.createElement("img");
+// image 혹은 cover 필드 중 하나를 사용
 const rawCover = (book.image || book.cover || "").trim();
+// GitHub에 올린 기본 이미지 URL (실제 경로로 바꿔줘야 함)
+const FALLBACK_IMAGE =
+  "https://raw.githubusercontent.com/ysoyeon721/soongin-library-2025newbook/main/assets/no-cover.png";
 img.src =
   rawCover && rawCover.startsWith("http")
     ? rawCover
-    : "https://via.placeholder.com/200x280?text=No+Image";
+    : FALLBACK_IMAGE;
 img.alt = book.title || "표지 이미지";
+
 
           coverWrapper.appendChild(img);
           const info = document.createElement("div");
@@ -842,4 +847,5 @@ img.alt = book.title || "표지 이미지";
   </script>
 </body>
 </html>
+
 
