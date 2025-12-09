@@ -633,8 +633,6 @@
 [교사용]문학 800|인생은 소설이다|기욤 뮈소 지음, 양영란 옮김|9788984374164|https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9788984374164.jpg|
 [교사용]문학 800|외투|니콜라이 바실리예비치 고골리 지음, 조주관 옮김|9788937429156|https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9788937429156.jpg|
 [교사용]역사 900|포르투갈은 블루다|조용준 지음|9791191455663|https://contents.kyobobook.co.kr/sih/fit-in/458x0/pdt/9791191455663.jpg|
-
-
 `;
     // 2) 여기부터는 JS 로직입니다.
     function kyoboSearchUrl(isbn) {
@@ -656,30 +654,66 @@
     function getKdcName(code) {
       return KDC_NAMES[code] || "";
     }
-    // 정규식 없이 파싱
-    function parseRawData(raw) {
-      const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l);
-      const books = [];
-      for (const line of lines) {
-        const parts = line.split("|").map(p => p.trim());
-        if (parts.length < 4) continue;
-        const left   = parts[0]; // [별치] 000 총류
-        const title  = parts[1] || "";
-        const author = parts[2] || "";
-        const isbn   = parts[3] || "";
-        const cover  = parts[4] || "";
-        const rb = left.indexOf("]");
-        if (left[0] !== "[" || rb === -1) continue;
-        const shelf = left.substring(1, rb).trim();
-        const rest  = left.substring(rb + 1).trim();
-        const restParts = rest.split(/\s+/);
-        const kdc = (restParts[0] || "").trim();
-        const kdcName = restParts.slice(1).join(" ").trim();
-        if (!kdc) continue;
-        books.push({ shelf, kdc, kdcName, title, author, isbn, cover });
+// 원시 텍스트(raw)에서 줄 단위로 신간도서 데이터 파싱
+function parseRawData(raw) {
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+  const books = [];
+
+  for (const line of lines) {
+    const parts = line.split("|").map(p => p.trim());
+    if (parts.length < 4) continue;
+
+    const left   = parts[0]; // 예: "[일반책] 000 총류"
+    const title  = parts[1];
+    const author = parts[2];
+    const isbn   = parts[3];
+    const image  = parts[4] || "";
+
+    // 1) 별치(shelf) 추출: [일반책], [교사용]
+    let shelf = "기타";
+    if (left.startsWith("[")) {
+      const endBracket = left.indexOf("]");
+      if (endBracket !== -1) {
+        shelf = left.slice(1, endBracket).trim(); // "일반책" 또는 "교사용"
       }
-      return books;
     }
+
+// 2) 대괄호 이후 부분만 사용해서 KDC 코드/이름 분리
+//    "[일반책]총류 000"  → afterBracket: "총류 000"
+//    "[교사용]문학 800"  → afterBracket: "문학 800"
+const afterBracket = left.includes("]")
+  ? left.split("]")[1].trim()
+  : left;
+// 3) KDC 코드: afterBracket 안에서 숫자 3자리만 추출
+//    "총류 000" → "000"
+//    "문학 800" → "800"
+let kdcCode = "";
+const codeMatch = afterBracket.match(/(\d{3})/);
+if (codeMatch) {
+  kdcCode = codeMatch[1];  // "000","800","400" ...
+}
+// 4) KDC 이름: 코드에서 가져오기 (KDC_NAMES 사용)
+let kdcName = "";
+if (typeof KDC_NAMES !== "undefined" && KDC_NAMES[kdcCode]) {
+  kdcName = KDC_NAMES[kdcCode];  // "총류","문학","자연과학" 등
+}
+
+
+    books.push({
+      shelf,      // "일반책" / "교사용" ...
+      kdc: kdcCode,   // ★ 중요: "000","700","800" 이런 숫자 3자리만 들어감
+      kdcName,    // "총류","언어","문학" ...
+      title,
+      author,
+      isbn,
+      image
+    });
+  }
+
+  return books;
+}
+
+
     function getShelves(data) {
       const map = new Map();
       data.forEach(book => {
@@ -721,30 +755,36 @@
         return;
       }
       // KDC 코드별 그룹
-      const group = new Map();
-      filtered.forEach(book => {
-        const code = String(book.kdc || "").padStart(3, "0").slice(0, 3);
-        if (!group.has(code)) group.set(code, []);
-        group.get(code).push(book);
-      });
-      const sortedCodes = Array.from(group.keys()).sort((a, b) =>
-        a.localeCompare(b, "ko")
-      );
-      sortedCodes.forEach(code => {
-        const books = group.get(code);
-        const sec = document.createElement("section");
-        sec.className = "kdc-section";
-        const nameFromData = books[0].kdcName || "";
-        const name = nameFromData || getKdcName(code);
-        // 헤더: ▼ / ▶ 토글 아이콘 포함
-        const header = document.createElement("div");
-        header.className = "kdc-header";
-        header.innerHTML = `
-          <div class="kdc-code">
-            <span class="kdc-toggle">▼</span> ${code} ${name || ""}
-          </div>
-          <div class="kdc-count">${books.length}권</div>
-        `;
+const group = new Map();
+filtered.forEach(book => {
+  // 혹시 모를 이상 데이터 방어: 숫자만 뽑아서 3자리 코드 만들기
+  const numeric = String(book.kdc || "").replace(/\D/g, "").slice(0, 3);
+  const code = numeric.padStart(3, "0");  // "000","100","800" ...
+  if (!group.has(code)) group.set(code, []);
+  group.get(code).push(book);
+});
+
+// 정렬도 문자열이 아니라 숫자 기준으로
+const sortedCodes = Array.from(group.keys()).sort(
+  (a, b) => Number(a) - Number(b)
+);
+
+sortedCodes.forEach(code => {
+  const books = group.get(code);
+  const sec = document.createElement("section");
+  sec.className = "kdc-section";
+
+const nameFromData = books[0].kdcName || "";
+const name = nameFromData || getKdcName(code);
+
+const header = document.createElement("div");
+header.className = "kdc-header";
+header.innerHTML = `
+  <div class="kdc-code">
+    <span class="kdc-toggle">▼</span> ${code} ${name || ""}
+  </div>
+  <div class="kdc-count">${books.length}권</div>
+`;
         header.style.cursor = "pointer";
         sec.appendChild(header);
         const toggleSpan = header.querySelector(".kdc-toggle");
@@ -760,9 +800,13 @@
           coverWrapper.target = "_blank";
           coverWrapper.rel = "noopener noreferrer";
           coverWrapper.title = `${book.title} - 교보문고 검색으로 이동`;
-          const img = document.createElement("img");
-          img.src = book.cover || "https://via.placeholder.com/200x280?text=No+Image";
-          img.alt = book.title || "표지 이미지";
+const img = document.createElement("img");
+img.src =
+  book.cover && book.cover.trim()
+    ? book.cover.trim()
+    : "https://via.placeholder.com/200x280?text=No+Image";
+img.alt = book.title || "표지 이미지";
+
           coverWrapper.appendChild(img);
           const info = document.createElement("div");
           info.className = "book-info";
@@ -797,5 +841,3 @@
   </script>
 </body>
 </html>
-
-
