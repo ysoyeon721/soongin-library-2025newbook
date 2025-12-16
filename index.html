@@ -148,6 +148,26 @@
       font-size: 0.7rem;
       color: #999;
     }
+    .loan-pill{
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #c5cae9;
+  background: #e8eaf6;
+  color: #283593;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+  line-height: 1;
+  width: fit-content;
+}
+.loan-pill:hover{
+  filter: brightness(0.98);
+}
+
   </style>
 </head>
 <body>
@@ -645,6 +665,14 @@
       const cleanIsbn = (isbn || "").replace(/[^0-9Xx]/g, "");
       return "https://search.kyobobook.co.kr/search?keyword=" + encodeURIComponent(cleanIsbn);
     }
+    function read365SearchUrl(isbn) {
+  const cleanIsbn = (isbn || "").replace(/[^0-9Xx]/g, "");
+  return "https://read365.edunet.net/PureScreen/SchoolSearchResult"
+    + "?searchKeyword=" + encodeURIComponent(cleanIsbn)
+    + "&provCode=B10"
+    + "&neisCode=B100002311"
+    + "&schoolName=" + encodeURIComponent("서울숭인초등학교");
+}
     const KDC_NAMES = {
       "000": "총류",
       "100": "철학",
@@ -824,11 +852,22 @@ img.alt = book.title || "표지 이미지";
           info.className = "book-info";
           const kdcCode = String(book.kdc || "").padStart(3, "0");
           const kdcName = book.kdcName || getKdcName(kdcCode);
-          info.innerHTML = `
-            <div class="book-title">${book.title || "(제목 정보 없음)"}</div>
-            <div class="book-author">${book.author || ""}</div>
-            <div class="book-kdc">${kdcCode} ${kdcName || ""}</div>
-          `;
+const hasIsbn = String(book.isbn || "").replace(/[^0-9Xx]/g, "").length > 0;
+info.innerHTML = `
+  <div class="book-title">${book.title || "(제목 정보 없음)"}</div>
+  <div class="book-author">${book.author || ""}</div>
+  <div class="book-kdc">${kdcCode} ${kdcName || ""}</div>
+  ${hasIsbn ? `
+    <a class="loan-pill"
+       href="${read365SearchUrl(book.isbn)}"
+       target="_blank"
+       rel="noopener noreferrer"
+       title="우리학교 도서관(독서로)에서 대출 가능 여부 확인">
+      대출 확인
+    </a>
+  ` : ``}
+`;
+
           card.appendChild(coverWrapper);
           card.appendChild(info);
           grid.appendChild(card);
@@ -853,6 +892,7 @@ img.alt = book.title || "표지 이미지";
   </script>
 </body>
 </html>
+
 
 
 
